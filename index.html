@@ -398,6 +398,9 @@ const slotsText = slots => isWholeDay(slots) && dayEnd() - dayStart() === DAY
   ? 'весь день'
   : slots.map(([s, e]) => `${fmtMin(s)}–${e === DAY ? '24:00' : fmtMin(e)}`).join(', ');
 
+// Для списков свободных дат и текста для копирования: «свободно» или «свободно 06:00–22:00»
+const freeText = slots => slots.length === 1 && slotsText(slots) === 'весь день' ? 'свободно' : `свободно ${slotsText(slots)}`;
+
 function freeDays(from, to, mode) {
   const res = [];
   for (let n = dayNum(from); n <= dayNum(to); n++) {
@@ -424,7 +427,7 @@ function pruneOverrides() {
 }
 
 function freeDaysText(days, title) {
-  const lines = days.filter(d => d.slots.length).map(d => `${dateShort(d.date)} — ${slotsText(d.slots)}`);
+  const lines = days.filter(d => d.slots.length).map(d => `${dateShort(d.date)} — ${freeText(d.slots)}`);
   return `${title}\n${lines.join('\n')}`;
 }
 
@@ -1001,7 +1004,7 @@ function freeListHtml(days) {
   return `<ul class="free-list">${days.map(d => `
     <li class="${d.slots.length ? '' : 'removed'}" data-date="${d.date}">
       <span class="d">${dateShort(d.date)}</span>
-      <span class="t">${d.slots.length ? slotsText(d.slots) : 'убрано из списка'}</span>
+      <span class="t">${d.slots.length ? freeText(d.slots) : 'убрано из списка'}</span>
       ${d.edited ? '<span class="tag">изменено</span>' : ''}
       <span class="edit">✎</span>
     </li>`).join('')}</ul>`;
