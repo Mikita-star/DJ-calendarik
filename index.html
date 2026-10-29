@@ -88,6 +88,13 @@
   .cal-head { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
   .cal-head h2 { flex: 1; text-align: center; margin: 0; font-size: 18px; text-transform: capitalize; }
   .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  #calendar, #tab-free { touch-action: pan-y; }
+  #tab-calendar, #tab-free { overflow-x: clip; }
+  @keyframes slideNext { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+  @keyframes slidePrev { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+  .slide-next { animation: slideNext .22s ease-out; }
+  .slide-prev { animation: slidePrev .22s ease-out; }
+  @media (prefers-reduced-motion: reduce) { .slide-next, .slide-prev { animation: none; } }
   .wd { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 0; }
   .wd.we { color: var(--soft-accent); }
   .cell { min-height: 74px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px;
@@ -500,8 +507,48 @@ let search = null; // { from, to, mode, days }
 $('weekdays').innerHTML = ['пн','вт','ср','чт','пт','сб','вс']
   .map((w, i) => `<div class="wd ${i > 4 ? 'we' : ''}">${w}</div>`).join('');
 
-$('prevMonth').onclick = () => { view.m--; if (view.m < 0) { view.m = 11; view.y--; } renderCalendar(); };
-$('nextMonth').onclick = () => { view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderCalendar(); };
+// ---------- Листание месяцев: стрелки и свайпы ----------
+function shiftView(v, dir) {
+  v.m += dir;
+  if (v.m < 0) { v.m = 11; v.y--; }
+  if (v.m > 11) { v.m = 0; v.y++; }
+}
+
+function slide(el, dir) {
+  el.classList.remove('slide-next', 'slide-prev');
+  void el.offsetWidth; // перезапуск анимации
+  el.classList.add(dir > 0 ? 'slide-next' : 'slide-prev');
+}
+
+// Свайп влево — следующий месяц, вправо — предыдущий; на Mac — жест двумя пальцами по трекпаду
+function attachSwipe(el, move) {
+  let x0 = null, y0 = 0;
+  el.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) { x0 = null; return; }
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+  }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) move(dx < 0 ? 1 : -1);
+  });
+  let acc = 0, lock = 0;
+  el.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    // пока идёт инерция одного жеста, второй раз не листаем
+    if (Date.now() < lock) { lock = Date.now() + 300; return; }
+    acc += e.deltaX;
+    if (Math.abs(acc) > 80) { move(acc > 0 ? 1 : -1); acc = 0; lock = Date.now() + 300; }
+  }, { passive: false });
+}
+
+const calMove = dir => { shiftView(view, dir); renderCalendar(); slide($('calendar'), dir); };
+$('prevMonth').onclick = () => calMove(-1);
+$('nextMonth').onclick = () => calMove(1);
+attachSwipe($('calendar'), calMove);
 
 function renderCalendar() {
   $('monthTitle').textContent = `${MONTHS[view.m]} ${view.y}`;
@@ -912,8 +959,10 @@ $('importFile').onchange = async e => {
 
 // ---------- Вкладка «Свободные даты» ----------
 let freeView = { y: now.getFullYear(), m: now.getMonth() };
-$('freePrev').onclick = () => { freeView.m--; if (freeView.m < 0) { freeView.m = 11; freeView.y--; } renderFreeMonth(); };
-$('freeNext').onclick = () => { freeView.m++; if (freeView.m > 11) { freeView.m = 0; freeView.y++; } renderFreeMonth(); };
+const freeMove = dir => { shiftView(freeView, dir); renderFreeMonth(); slide($('freeMonthList'), dir); };
+$('freePrev').onclick = () => freeMove(-1);
+$('freeNext').onclick = () => freeMove(1);
+attachSwipe($('tab-free'), freeMove);
 
 function freeMonthData() {
   let [from, to] = monthBounds(freeView.y, freeView.m);
