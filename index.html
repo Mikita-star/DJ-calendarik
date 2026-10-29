@@ -92,8 +92,12 @@
   .cal-head { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
   .cal-head h2 { flex: 1; text-align: center; margin: 0; font-size: 18px; text-transform: capitalize; }
   .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-  #calendar, #tab-free { touch-action: pan-y; }
-  #tab-calendar, #tab-free { overflow-x: clip; }
+  #calendar, #tab-free, #tab-sets { touch-action: pan-y; }
+  #tab-calendar, #tab-free, #tab-sets { overflow-x: clip; }
+  .set-day { padding: 10px 0 2px; border-bottom: 1px solid var(--line); }
+  .set-day:last-child { border-bottom: 0; }
+  .set-day .d { font-weight: 600; margin-bottom: 6px; }
+  .set-day.past { opacity: .5; }
   @keyframes slideNext { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
   @keyframes slidePrev { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
   .slide-next { animation: slideNext .22s ease-out; }
@@ -204,6 +208,19 @@
     <div id="searchResult"></div>
   </section>
 
+  <!-- Вкладка: Список сетов -->
+  <section class="tab" id="tab-sets">
+    <div class="cal-head">
+      <button class="icon-btn" id="setsPrev" aria-label="Предыдущий месяц">‹</button>
+      <h2 id="setsTitle"></h2>
+      <button class="icon-btn" id="setsNext" aria-label="Следующий месяц">›</button>
+    </div>
+    <div class="card">
+      <div class="muted" id="setsCount" style="margin-bottom:4px"></div>
+      <div id="setsList"></div>
+    </div>
+  </section>
+
   <!-- Вкладка: Занятость -->
   <section class="tab" id="tab-busy">
     <div class="row" style="margin:6px 0 12px">
@@ -243,6 +260,10 @@
   <button class="active" data-tab="calendar">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
     Календарь
+  </button>
+  <button data-tab="sets">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 0 1 9 9"/></svg>
+    Список сетов
   </button>
   <button data-tab="busy">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
@@ -958,6 +979,42 @@ $('importFile').onchange = async e => {
   }
 };
 
+// ---------- Вкладка «Список сетов» ----------
+let setsView = { y: now.getFullYear(), m: now.getMonth() };
+const setsMove = dir => { shiftView(setsView, dir); renderSets(); slide($('setsList'), dir); };
+$('setsPrev').onclick = () => setsMove(-1);
+$('setsNext').onclick = () => setsMove(1);
+attachSwipe($('tab-sets'), setsMove);
+
+// Дорога в часах: «(+1 дорога)», «(+1,5 дорога)»
+function travelNote(min) {
+  if (!min) return '';
+  const h = Math.round(min / 60 * 100) / 100;
+  return ` (+${String(h).replace('.', ',')} дорога)`;
+}
+
+function renderSets() {
+  $('setsTitle').textContent = `${MONTHS[setsView.m]} ${setsView.y}`;
+  const [from, to] = monthBounds(setsView.y, setsView.m);
+  const today = todayStr();
+  const dates = [...new Set(state.bookings.filter(b => b.date >= from && b.date <= to).map(b => b.date))].sort();
+  $('setsCount').textContent = dates.length ? `Занятых дат: ${dates.length}` : '';
+  $('setsList').innerHTML = dates.length ? dates.map(ds => `
+    <div class="set-day ${ds < today ? 'past' : ''}">
+      <div class="d">${dateShort(ds)}</div>
+      ${bookingsOn(ds).map(b => `
+        <button class="booking" style="border-left-color:${bookingColor(b)}" data-id="${b.id}">
+          <div class="info">
+            <div><b>${esc(bookingTitle(b))}</b> <span class="muted">· ${esc((catById(b.categoryId) || {}).name || '')}</span></div>
+            <div class="meta">${bookingTime(b)}${b.allDay ? '' : travelNote(b.travel)}${b.note ? ' · ' + esc(b.note) : ''}</div>
+          </div>
+          <span class="muted">›</span>
+        </button>`).join('')}
+    </div>`).join('') : '<div class="empty">В этом месяце сетов нет</div>';
+  $('setsList').querySelectorAll('.booking').forEach(el =>
+    el.onclick = () => openBookingForm(state.bookings.find(x => x.id === el.dataset.id), closeModal));
+}
+
 // ---------- Вкладка «Свободные даты» ----------
 let freeView = { y: now.getFullYear(), m: now.getMonth() };
 const freeMove = dir => { shiftView(freeView, dir); renderFreeMonth(); slide($('freeMonthList'), dir); };
@@ -1171,6 +1228,7 @@ function renderAll() {
   renderCalendar();
   renderCategories();
   renderFreeMonth();
+  renderSets();
   renderConflictBadge();
 }
 
