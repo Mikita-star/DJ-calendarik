@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="DJ Календарь">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="icon" type="image/png" href="icon-192.png">
 <title>DJ Календарь</title>
 <style>
@@ -280,24 +281,35 @@ function defaultState() {
   };
 }
 
+// Проверяет и дополняет данные; повреждённые данные — null
+function normalize(data) {
+  if (data && Array.isArray(data.categories) && Array.isArray(data.bookings)) {
+    return { ...data, settings: { minGap: 60, ...data.settings }, overrides: data.overrides || {} };
+  }
+  return null;
+}
+
 function load() {
   try {
-    const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
     // Повреждённые или пустые данные не роняют приложение — открываем с настройками по умолчанию
-    if (data && Array.isArray(data.categories) && Array.isArray(data.bookings)) {
-      return { ...data, settings: { minGap: 60, ...data.settings } };
-    }
+    const data = normalize(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+    if (data) return data;
   } catch (e) {}
   return defaultState();
 }
 
 let state = load();
-state.overrides = state.overrides || {};
+
+function storeLocal() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
 
 function save() {
   pruneOverrides();
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  state.updatedAt = Date.now();
+  storeLocal();
   renderAll();
+  cloudPushSoon();
 }
 
 // ---------- Даты и время ----------
@@ -870,7 +882,7 @@ $('importFile').onchange = async e => {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.categories) || !Array.isArray(data.bookings)) throw new Error();
     if (!await askConfirm('Текущие данные будут заменены данными из файла. Продолжить?', 'Заменить')) return;
-    state = { settings: { minGap: 60 }, overrides: {}, ...data };
+    state = normalize(data);
     save();
     toast('Данные загружены');
   } catch (err) {
@@ -1044,8 +1056,123 @@ function renderAll() {
   renderFreeMonth();
 }
 
+// ---------- Синхронизация через Telegram ----------
+// Внутри Telegram данные хранятся ещё и в облаке Telegram (CloudStorage), поэтому календарь
+// одинаковый на всех устройствах одного аккаунта. В одном ключе — не больше 4096 символов,
+// поэтому данные режутся на куски. Каждая запись идёт под новым «поколением» ключей,
+// а мета-ключ переключается на него в самом конце: недописанная запись не портит облако.
+const tg = window.Telegram && window.Telegram.WebApp;
+const cloud = tg && tg.initData && tg.isVersionAtLeast && tg.isVersionAtLeast('6.9') ? tg.CloudStorage : null;
+const CLOUD_META = 'djcal_meta';
+const CLOUD_CHUNK = 4000;
+const SYNCED_KEY = 'djcal.cloudSynced';
+
+const cloudCall = (method, ...args) => new Promise((resolve, reject) =>
+  cloud[method](...args, (err, res) => err ? reject(err) : resolve(res)));
+const chunkKeys = meta => Array.from({ length: meta.n }, (_, i) => `djcal_${meta.gen}_${i}`);
+
+async function cloudReadMeta() {
+  return JSON.parse(await cloudCall('getItem', CLOUD_META) || 'null');
+}
+
+async function cloudRead() {
+  const meta = await cloudReadMeta();
+  if (!meta) return null;
+  const keys = chunkKeys(meta);
+  const parts = await cloudCall('getItems', keys);
+  const data = normalize(JSON.parse(keys.map(k => parts[k] || '').join('')));
+  if (!data) throw new Error('broken cloud data');
+  return { meta, data };
+}
+
+async function cloudWrite() {
+  const prev = await cloudReadMeta();
+  const json = JSON.stringify(state);
+  const meta = { gen: Date.now().toString(36), n: Math.max(1, Math.ceil(json.length / CLOUD_CHUNK)), updatedAt: state.updatedAt || 0 };
+  const keys = chunkKeys(meta);
+  for (let i = 0; i < keys.length; i++) await cloudCall('setItem', keys[i], json.slice(i * CLOUD_CHUNK, (i + 1) * CLOUD_CHUNK));
+  await cloudCall('setItem', CLOUD_META, JSON.stringify(meta));
+  if (prev && prev.gen !== meta.gen) await cloudCall('removeItems', chunkKeys(prev)).catch(() => {});
+}
+
+// Записи в облако идут строго по очереди
+let cloudQueue = Promise.resolve();
+let cloudTimer;
+function cloudPushSoon() {
+  if (!cloud) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(() => {
+    cloudQueue = cloudQueue.then(cloudWrite).catch(() => toast('Не удалось сохранить в облако Telegram', true));
+  }, 800);
+}
+
+// Первая синхронизация на устройстве объединяет его данные с облаком, чтобы ничего не потерять:
+// категории и места с одинаковым названием склеиваются, одинаковые записи не дублируются.
+function mergeStates(a, b) {
+  const [newer, older] = (a.updatedAt || 0) >= (b.updatedAt || 0) ? [a, b] : [b, a];
+  const res = JSON.parse(JSON.stringify(newer));
+  const norm = s => String(s || '').trim().toLowerCase();
+  const catMap = {}, placeMap = {};
+  for (const c of older.categories) {
+    let t = res.categories.find(x => x.id === c.id) || res.categories.find(x => norm(x.name) === norm(c.name));
+    if (!t) { t = { ...c, places: [] }; res.categories.push(t); }
+    catMap[c.id] = t.id;
+    for (const p of c.places || []) {
+      let tp = t.places.find(x => x.id === p.id) || t.places.find(x => norm(x.name) === norm(p.name));
+      if (!tp) { tp = { ...p }; t.places.push(tp); }
+      placeMap[p.id] = tp.id;
+    }
+  }
+  const sig = x => [x.date, x.allDay ? 'весь день' : `${x.start}-${x.end}`, norm(x.name), x.categoryId].join('|');
+  const ids = new Set(res.bookings.map(x => x.id));
+  const sigs = new Set(res.bookings.map(sig));
+  for (const bk of older.bookings) {
+    const nb = { ...bk, categoryId: catMap[bk.categoryId] || bk.categoryId, placeId: bk.placeId ? (placeMap[bk.placeId] || bk.placeId) : '' };
+    if (ids.has(nb.id) || sigs.has(sig(nb))) continue;
+    res.bookings.push(nb);
+    ids.add(nb.id);
+    sigs.add(sig(nb));
+  }
+  res.overrides = res.overrides || {};
+  for (const ds in older.overrides || {}) if (!res.overrides[ds]) res.overrides[ds] = older.overrides[ds];
+  return res;
+}
+
+// Потом — побеждает более свежая версия
+async function cloudPull() {
+  if (!cloud) return;
+  let remote;
+  try { remote = await cloudRead(); } catch (e) { return; } // облако недоступно — работаем с тем, что есть
+  let synced = false;
+  try { synced = localStorage.getItem(SYNCED_KEY) === '1'; } catch (e) {}
+  const localTime = state.updatedAt || 0;
+  if (!remote) {
+    cloudPushSoon();
+  } else if (!synced) {
+    state = mergeStates(state, remote.data);
+    applyTheme();
+    save();
+  } else if ((remote.meta.updatedAt || 0) > localTime) {
+    state = remote.data;
+    storeLocal();
+    applyTheme();
+    renderAll();
+  } else if (localTime > (remote.meta.updatedAt || 0)) {
+    cloudPushSoon();
+  }
+  try { localStorage.setItem(SYNCED_KEY, '1'); } catch (e) {}
+}
+
 applyTheme();
 renderAll();
+
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
+cloudPull();
+// Вернулись в приложение (например, после правок на другом устройстве) — подтягиваем свежие данные
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cloudPull(); });
 
 // Установка на экран «Домой»: офлайн-режим и просьба не удалять данные
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

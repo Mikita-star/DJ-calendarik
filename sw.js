@@ -1,6 +1,6 @@
 // Офлайн-режим: страница берётся из сети, если она есть (так подтягиваются обновления),
 // иначе из кэша. Данные календаря хранятся отдельно и кэш их не трогает.
-const CACHE = 'djcal-v2';
+const CACHE = 'djcal-v3';
 const FILES = ['./', './index.html', './manifest.json', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -14,7 +14,8 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  // Чужие адреса (например, скрипт Telegram) браузер загружает сам, без нашего кэша
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   // no-cache: всегда сверяемся с сервером, иначе браузер может отдать старую версию из своего кэша
   e.respondWith(
     fetch(e.request.url, { cache: 'no-cache' })
