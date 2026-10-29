@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e0e14">
+<meta name="apple-mobile-web-app-title" content="DJ Календарь">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>DJ Календарь</title>
+<style>
+  :root {
+    --bg: #0e0e14;
+    --panel: #171722;
+    --panel2: #1f1f2e;
+    --line: #2b2b3d;
+    --text: #ececf3;
+    --muted: #8d8da6;
+    --accent: #8b5cf6;
+    --free: #22c55e;
+    --danger: #ef4444;
+    --radius: 14px;
+    --nav: rgba(14,14,20,.95);
+    --ev-bg: rgba(255,255,255,.05);
+    --soft-accent: #c4b5fd;
+    --tag-line: #4c3a8a;
+    --warn-text: #fca5a5;
+    --statusbar: var(--bg);
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f4f8;
+    --panel: #ffffff;
+    --panel2: #ececf3;
+    --line: #d9d9e3;
+    --text: #17171f;
+    --muted: #6a6a7e;
+    --accent: #7c3aed;
+    --free: #16a34a;
+    --danger: #dc2626;
+    --nav: rgba(255,255,255,.95);
+    --ev-bg: rgba(0,0,0,.05);
+    --soft-accent: #7c3aed;
+    --tag-line: #c4b5fd;
+    --warn-text: #b91c1c;
+    --statusbar: #7c3aed; /* на iPhone текст статус-бара белый, на светлом фоне его не видно */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--statusbar); z-index: 15; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  header { padding: calc(14px + env(safe-area-inset-top)) 16px 8px; display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: .3px; }
+  header h1 span { color: var(--accent); }
+  main { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* Нижняя навигация */
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--nav);
+    backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 10; }
+  nav.tabs button { flex: 1; background: none; border: 0; padding: 10px 4px 12px; color: var(--muted); font-size: 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  nav.tabs button svg { width: 22px; height: 22px; }
+  nav.tabs button.active { color: var(--accent); }
+
+  /* Кнопки */
+  .btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.green { background: var(--free); border-color: var(--free); color: #04140a; font-weight: 600; }
+  .btn.danger { color: var(--danger); }
+  .btn.small { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+  .btn:disabled { opacity: .5; }
+  .icon-btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; width: 38px; height: 38px;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+
+  /* Календарь */
+  .cal-head { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
+  .cal-head h2 { flex: 1; text-align: center; margin: 0; font-size: 18px; text-transform: capitalize; }
+  .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .wd { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 0; }
+  .wd.we { color: var(--soft-accent); }
+  .cell { min-height: 74px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px;
+    display: flex; flex-direction: column; gap: 2px; overflow: hidden; text-align: left; }
+  .cell.other { opacity: .35; }
+  .cell.today { border-color: var(--accent); }
+  .cell .num { font-size: 13px; font-weight: 600; }
+  .cell.today .num { color: var(--accent); }
+  .ev { font-size: 10.5px; line-height: 1.25; border-left: 3px solid; padding: 1px 3px; border-radius: 3px;
+    background: var(--ev-bg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .more { font-size: 10px; color: var(--muted); }
+  .cell.hl-free { border-color: var(--free); background: rgba(34,197,94,.12); }
+  .cell.hl-free .num { color: var(--free); }
+  .cell.hl-dim { opacity: .3; }
+  .freebadge { font-size: 10px; color: var(--free); margin-top: auto; }
+  @media (min-width: 600px) { .cell { min-height: 92px; } .ev { font-size: 12px; } }
+
+  .free-btn { width: 100%; margin: 12px 0; padding: 13px; font-size: 16px; }
+
+  /* Списки свободного времени */
+  .free-list { margin: 0; padding: 0; list-style: none; }
+  .free-list li { padding: 9px 0; border-bottom: 1px solid var(--line); display: flex; gap: 10px; }
+  .free-list li:last-child { border-bottom: 0; }
+  .free-list .d { min-width: 118px; font-weight: 600; }
+  .free-list .t { color: var(--free); flex: 1; }
+  .free-list li[data-date] { cursor: pointer; align-items: center; }
+  .free-list li.removed .d, .free-list li.removed .t { color: var(--muted); text-decoration: line-through; }
+  .free-list .tag { font-size: 11px; color: var(--soft-accent); border: 1px solid var(--tag-line); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+  .free-list .edit { color: var(--muted); font-size: 14px; }
+  .slot-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .slot-row input { flex: 1; }
+
+  /* Занятость */
+  .cat-head { display: flex; align-items: center; gap: 10px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .cat-head h3 { margin: 0; font-size: 17px; flex: 1; }
+  .place { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .place .info { flex: 1; min-width: 0; }
+  .place .name { font-weight: 600; }
+  .place .meta { font-size: 13px; color: var(--muted); }
+
+  /* Модальные окна */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: flex-end; justify-content: center; z-index: 20; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 18px 18px 0 0; width: 100%; max-width: 560px;
+    max-height: 92vh; overflow-y: auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+  @media (min-width: 600px) { .overlay { align-items: center; } .modal { border-radius: 18px; } }
+  .modal h3 { margin: 0 0 12px; font-size: 18px; }
+  label.f { display: block; margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
+  input[type=text], input[type=date], input[type=time], input[type=number], select {
+    width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-height: 42px; }
+  input[type=color] { width: 48px; height: 42px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); padding: 3px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; font-size: 13px; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seg { display: flex; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { flex: 1; border: 0; background: none; padding: 8px 4px; border-radius: 8px; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .actions .btn { flex: 1; padding: 12px; }
+  .booking { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; background: var(--panel2);
+    border-left: 4px solid; margin-bottom: 8px; width: 100%; text-align: left; border-top: 0; border-right: 0; border-bottom: 0; }
+  .booking .info { flex: 1; min-width: 0; }
+  .booking .meta { font-size: 13px; color: var(--muted); }
+  .warn { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: var(--warn-text); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin-top: 10px; }
+  .check { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-weight: 600; cursor: pointer; }
+  .check input { width: 22px; height: 22px; accent-color: var(--accent); margin: 0; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+    background: var(--free); color: #04140a; font-weight: 600; padding: 10px 18px; border-radius: 999px; opacity: 0;
+    transition: .25s; pointer-events: none; z-index: 30; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { background: var(--danger); color: #fff; }
+  .empty { text-align: center; color: var(--muted); padding: 24px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DJ <span>Календарь</span></h1>
+  <button class="icon-btn" id="openSettings" aria-label="Настройки">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+</header>
+
+<main>
+  <!-- Вкладка: Календарь -->
+  <section class="tab active" id="tab-calendar">
+    <div class="cal-head">
+      <button class="icon-btn" id="prevMonth" aria-label="Предыдущий месяц">‹</button>
+      <h2 id="monthTitle"></h2>
+      <button class="icon-btn" id="nextMonth" aria-label="Следующий месяц">›</button>
+    </div>
+    <div class="grid" id="weekdays"></div>
+    <div class="grid" id="calendar"></div>
+    <button class="btn green free-btn" id="openSearch">Свободные даты</button>
+    <div id="searchResult"></div>
+  </section>
+
+  <!-- Вкладка: Занятость -->
+  <section class="tab" id="tab-busy">
+    <div class="row" style="margin:6px 0 12px">
+      <h2 style="margin:0;font-size:18px" class="spacer">Категории занятости</h2>
+      <button class="btn primary small" id="addCategory">+ Категория</button>
+    </div>
+    <div id="categories"></div>
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:16px">Настройки</h3>
+      <label class="f">Минимальный свободный промежуток (короче — не показывать)</label>
+      <select id="minGap">
+        <option value="0">Показывать любые</option>
+        <option value="30">30 минут</option>
+        <option value="60">1 час</option>
+        <option value="120">2 часа</option>
+        <option value="180">3 часа</option>
+      </select>
+      <label class="f">Резервная копия данных</label>
+      <div class="row">
+        <button class="btn small" id="exportData">Сохранить в файл</button>
+        <button class="btn small" id="importData">Загрузить из файла</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+    </div>
+  </section>
+
+  <!-- Вкладка: Свободные даты -->
+  <section class="tab" id="tab-free">
+    <div class="cal-head">
+      <button class="icon-btn" id="freePrev" aria-label="Предыдущий месяц">‹</button>
+      <h2 id="freeTitle"></h2>
+      <button class="icon-btn" id="freeNext" aria-label="Следующий месяц">›</button>
+    </div>
+    <div class="card">
+      <div class="row" style="margin-bottom:6px">
+        <span class="muted spacer" id="freeCount"></span>
+        <button class="btn small" id="resetMonth" style="display:none">Сбросить правки</button>
+        <button class="btn green small" id="copyMonth">Скопировать</button>
+      </div>
+      <div id="freeMonthList"></div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button class="active" data-tab="calendar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+    Календарь
+  </button>
+  <button data-tab="busy">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+    Занятость
+  </button>
+  <button data-tab="free">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+    Свободные даты
+  </button>
+</nav>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div class="overlay" id="confirmOverlay" style="z-index:25"><div class="modal" id="confirmBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'djcal.v1';
+const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const WD_SHORT = ['вс','пн','вт','ср','чт','пт','сб'];
+const WD_LONG = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+const TRAVEL_PRESETS = [0, 30, 60, 90, 120, 180];
+const DAY = 1440;
+// Границы суток берутся из настроек. Ночь до начала суток относится к предыдущей дате.
+// Если конец не позже начала — он на следующий день (06:00–06:00 — это полные 24 часа).
+const dayStart = () => toMin(state.settings.dayStart || '06:00');
+const dayEnd = () => { const s = dayStart(); let e = toMin(state.settings.dayEnd || '06:00'); if (e <= s) e += DAY; return e; };
+const nightHint = () => dayStart() ? `Время с 00:00 до ${fmtMin(dayStart())} — это ночь после выбранной даты.` : '';
+
+// ---------- Данные ----------
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function defaultState() {
+  return {
+    categories: [
+      { id: uid(), name: 'Клуб', color: '#8b5cf6', places: [] },
+      { id: uid(), name: 'Ивент', color: '#f59e0b', places: [] },
+    ],
+    bookings: [],
+    settings: { minGap: 60 },
+    overrides: {},
+  };
+}
+
+function load() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    // Повреждённые или пустые данные не роняют приложение — открываем с настройками по умолчанию
+    if (data && Array.isArray(data.categories) && Array.isArray(data.bookings)) {
+      return { ...data, settings: { minGap: 60, ...data.settings } };
+    }
+  } catch (e) {}
+  return defaultState();
+}
+
+let state = load();
+state.overrides = state.overrides || {};
+
+function save() {
+  pruneOverrides();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  renderAll();
+}
+
+// ---------- Даты и время ----------
+const pad = n => String(n).padStart(2, '0');
+const ymd = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const todayStr = () => { const t = new Date(); return ymd(t.getFullYear(), t.getMonth(), t.getDate()); };
+const parseDate = s => { const [y, m, d] = s.split('-').map(Number); return { y, m: m - 1, d }; };
+// Номер дня от эпохи — удобно для арифметики без часовых поясов
+const dayNum = s => { const { y, m, d } = parseDate(s); return Math.round(Date.UTC(y, m, d) / 86400000); };
+const fromDayNum = n => { const t = new Date(n * 86400000); return ymd(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()); };
+const weekday = s => { const { y, m, d } = parseDate(s); return new Date(y, m, d).getDay(); };
+const isWeekend = s => { const w = weekday(s); return w === 0 || w === 6; };
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const fmtMin = m => { m = ((m % DAY) + DAY) % DAY; return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
+const fmtDur = m => m === 0 ? 'без дороги' : (m >= 60 ? `${Math.floor(m / 60)} ч` + (m % 60 ? ` ${m % 60} мин` : '') : `${m} мин`);
+const dateShort = s => { const { m, d } = parseDate(s); return `${d} ${MONTHS_GEN[m]}, ${WD_SHORT[weekday(s)]}`; };
+const dateLong = s => { const { m, d } = parseDate(s); return `${d} ${MONTHS_GEN[m]}, ${WD_LONG[weekday(s)]}`; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Время внутри суток даты: всё, что раньше начала суток, — это ночь после этой даты
+const dayMin = t => { const m = toMin(t); return m < dayStart() ? m + DAY : m; };
+
+// Абсолютный интервал занятости (в минутах): конец после полуночи переносится на следующий день,
+// время на дорогу добавляется после окончания.
+function busyInterval(b) {
+  const base = dayNum(b.date) * DAY;
+  if (b.allDay) return [base + dayStart(), base + dayEnd()]; // занимает все сутки целиком, без дороги
+  const s = dayMin(b.start);
+  let e = dayMin(b.end);
+  if (e <= s) e += DAY;
+  return [base + s, base + e + (b.travel || 0)];
+}
+
+// Свободные промежутки внутри суток (границы из настроек), в минутах от полуночи этой даты
+function freeSlots(dateStr, excludeId) {
+  const base = dayNum(dateStr) * DAY;
+  const from = dayStart(), to = dayEnd();
+  const busy = state.bookings
+    .filter(b => b.id !== excludeId)
+    .map(busyInterval)
+    .map(([s, e]) => [s - base, e - base])
+    .filter(([s, e]) => s < to && e > from)
+    .map(([s, e]) => [Math.max(s, from), Math.min(e, to)])
+    .sort((a, b) => a[0] - b[0]);
+  const slots = [];
+  let cur = from;
+  for (const [s, e] of busy) {
+    if (s > cur) slots.push([cur, s]);
+    cur = Math.max(cur, e);
+  }
+  if (cur < to) slots.push([cur, to]);
+  const min = Number(state.settings.minGap) || 0;
+  return slots.filter(([s, e]) => e - s >= Math.max(min, 1));
+}
+
+// «Весь день» пишем, только когда сутки полные (24 часа) и свободны целиком
+const isWholeDay = slots => slots.length === 1 && slots[0][0] === dayStart() && slots[0][1] === dayEnd();
+const slotsText = slots => isWholeDay(slots) && dayEnd() - dayStart() === DAY
+  ? 'весь день'
+  : slots.map(([s, e]) => `${fmtMin(s)}–${e === DAY ? '24:00' : fmtMin(e)}`).join(', ');
+
+function freeDays(from, to, mode) {
+  const res = [];
+  for (let n = dayNum(from); n <= dayNum(to); n++) {
+    const ds = fromDayNum(n);
+    if (mode === 'weekdays' && isWeekend(ds)) continue;
+    if (mode === 'weekends' && !isWeekend(ds)) continue;
+    const real = freeSlots(ds);
+    if (!real.length) continue;
+    const edited = listSlots(ds, real);
+    res.push({ date: ds, real, slots: edited || real, edited: !!edited });
+  }
+  return res;
+}
+
+// Ручные правки списка свободных дат. Календарь и занятость они не меняют.
+// base — свободное время по календарю на момент правки: если оно изменилось, правка сбрасывается.
+const sameSlots = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function listSlots(ds, real) {
+  const o = state.overrides[ds];
+  return o && sameSlots(o.base, real) ? o.slots : null;
+}
+function pruneOverrides() {
+  for (const ds in state.overrides) if (!sameSlots(state.overrides[ds].base, freeSlots(ds))) delete state.overrides[ds];
+}
+
+function freeDaysText(days, title) {
+  const lines = days.filter(d => d.slots.length).map(d => `${dateShort(d.date)} — ${slotsText(d.slots)}`);
+  return `${title}\n${lines.join('\n')}`;
+}
+
+const bookingSortKey = b => b.allDay ? -1 : dayMin(b.start);
+const bookingsOn = ds => state.bookings.filter(b => b.date === ds).sort((a, b) => bookingSortKey(a) - bookingSortKey(b));
+const bookingTime = b => b.allDay ? 'весь день' : `${b.start}–${b.end}`;
+const catById = id => state.categories.find(c => c.id === id);
+const bookingTitle = b => {
+  const c = catById(b.categoryId);
+  return b.name || (c ? c.name : 'Занятость');
+};
+const bookingColor = b => (catById(b.categoryId) || {}).color || '#888';
+
+// ---------- Утилиты интерфейса ----------
+const $ = id => document.getElementById(id);
+
+function toast(text, isError) {
+  const t = $('toast');
+  t.textContent = text;
+  t.classList.toggle('err', !!isError);
+  t.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+  toast('Скопировано');
+}
+
+function openModal(html) {
+  $('modal').innerHTML = html;
+  $('overlay').classList.add('open');
+}
+// При закрытии окна возвращаем сохранённую тему (её можно было только примерить в настройках)
+function closeModal() { $('overlay').classList.remove('open'); applyTheme(); }
+
+// Своё окно подтверждения: системный confirm() в некоторых браузерах и встроенных окнах блокируется
+function askConfirm(text, okLabel = 'Удалить', danger = true) {
+  return new Promise(resolve => {
+    $('confirmBox').innerHTML = `
+      <h3>Подтвердите</h3>
+      <p style="margin:0">${esc(text)}</p>
+      <div class="actions">
+        <button class="btn" id="cfNo">Отмена</button>
+        <button class="btn ${danger ? 'primary' : 'green'}" id="cfYes" ${danger ? 'style="background:var(--danger);border-color:var(--danger)"' : ''}>${esc(okLabel)}</button>
+      </div>`;
+    $('confirmOverlay').classList.add('open');
+    const done = v => { $('confirmOverlay').classList.remove('open'); resolve(v); };
+    $('cfNo').onclick = () => done(false);
+    $('cfYes').onclick = () => done(true);
+    $('confirmOverlay').onclick = e => { if (e.target.id === 'confirmOverlay') done(false); };
+  });
+}
+$('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+
+// ---------- Вкладки ----------
+document.querySelectorAll('nav.tabs button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + btn.dataset.tab));
+  window.scrollTo(0, 0);
+}));
+
+// ---------- Календарь ----------
+const now = new Date();
+let view = { y: now.getFullYear(), m: now.getMonth() };
+let search = null; // { from, to, mode, days }
+
+$('weekdays').innerHTML = ['пн','вт','ср','чт','пт','сб','вс']
+  .map((w, i) => `<div class="wd ${i > 4 ? 'we' : ''}">${w}</div>`).join('');
+
+$('prevMonth').onclick = () => { view.m--; if (view.m < 0) { view.m = 11; view.y--; } renderCalendar(); };
+$('nextMonth').onclick = () => { view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderCalendar(); };
+
+function renderCalendar() {
+  $('monthTitle').textContent = `${MONTHS[view.m]} ${view.y}`;
+  const first = new Date(view.y, view.m, 1);
+  const shift = (first.getDay() + 6) % 7; // понедельник — первый день
+  const startN = dayNum(ymd(view.y, view.m, 1)) - shift;
+  const today = todayStr();
+  if (search) search.days = freeDays(search.from, search.to, search.mode);
+  const freeSet = search ? new Set(search.days.map(d => d.date)) : null;
+  let html = '';
+  for (let i = 0; i < 42; i++) {
+    const ds = fromDayNum(startN + i);
+    const { m, d } = parseDate(ds);
+    if (i >= 35 && m !== view.m) break;
+    const list = bookingsOn(ds);
+    const cls = ['cell'];
+    if (m !== view.m) cls.push('other');
+    if (ds === today) cls.push('today');
+    let badge = '';
+    if (search) {
+      const inRange = ds >= search.from && ds <= search.to;
+      if (inRange && freeSet.has(ds)) {
+        cls.push('hl-free');
+        const slots = search.days.find(x => x.date === ds).real;
+        badge = `<div class="freebadge">${isWholeDay(slots) ? 'свободно' : 'с ' + fmtMin(slots[0][0])}</div>`;
+      } else {
+        cls.push('hl-dim');
+      }
+    }
+    const evs = list.slice(0, 2).map(b =>
+      `<div class="ev" style="border-color:${bookingColor(b)}">${b.allDay ? 'Весь день' : b.start} ${esc(bookingTitle(b))}</div>`).join('');
+    const more = list.length > 2 ? `<div class="more">+${list.length - 2}</div>` : '';
+    html += `<button class="${cls.join(' ')}" data-date="${ds}"><span class="num">${d}</span>${evs}${more}${badge}</button>`;
+  }
+  $('calendar').innerHTML = html;
+  $('calendar').querySelectorAll('.cell').forEach(c => c.onclick = () => openDay(c.dataset.date));
+  renderSearchResult();
+}
+
+// ---------- Окно дня ----------
+function openDay(ds) {
+  const list = bookingsOn(ds);
+  const slots = freeSlots(ds);
+  const items = list.length ? list.map(b => `
+    <button class="booking" style="border-left-color:${bookingColor(b)}" data-id="${b.id}">
+      <div class="info">
+        <div><b>${esc(bookingTitle(b))}</b> <span class="muted">· ${esc((catById(b.categoryId) || {}).name || '')}</span></div>
+        <div class="meta">${bookingTime(b)}${b.allDay ? '' : ' · дорога: ' + fmtDur(b.travel || 0)}${b.note ? ' · ' + esc(b.note) : ''}</div>
+      </div>
+      <span class="muted">›</span>
+    </button>`).join('') : '<div class="empty">Нет занятости</div>';
+  openModal(`
+    <h3>${dateLong(ds)}</h3>
+    ${items}
+    <div class="card" style="margin:12px 0 0">
+      <div class="muted" style="font-size:13px">Свободно</div>
+      <div style="color:var(--free);font-weight:600">${slots.length ? slotsText(slots) : 'нет свободного времени'}</div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="closeModal()">Закрыть</button>
+      <button class="btn primary" id="addBooking">+ Занятость</button>
+    </div>`);
+  $('addBooking').onclick = () => openBookingForm({ date: ds });
+  $('modal').querySelectorAll('.booking').forEach(el =>
+    el.onclick = () => openBookingForm(state.bookings.find(b => b.id === el.dataset.id)));
+}
+
+// ---------- Форма занятости ----------
+function openBookingForm(b) {
+  const isNew = !b.id;
+  const f = Object.assign({ categoryId: state.categories[0]?.id || '', placeId: '', name: '', start: '22:00', end: '02:00', travel: 60, note: '' }, b);
+  if (!state.categories.length) {
+    openModal(`<h3>Сначала добавьте категорию</h3>
+      <p class="muted">Во вкладке «Занятость» создайте хотя бы одну категорию, например «Клуб».</p>
+      <div class="actions"><button class="btn primary" onclick="closeModal()">Понятно</button></div>`);
+    return;
+  }
+  openModal(`
+    <h3>${isNew ? 'Новая занятость' : 'Изменить занятость'}</h3>
+    <label class="f">Дата</label>
+    <input type="date" id="fDate" value="${f.date}">
+    <label class="f">Тип занятости</label>
+    <select id="fCat">${state.categories.map(c => `<option value="${c.id}" ${c.id === f.categoryId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+    <label class="f">Место</label>
+    <select id="fPlace"></select>
+    <div id="fNameWrap">
+      <label class="f">Название</label>
+      <input type="text" id="fName" value="${esc(f.name)}" placeholder="Например: частная вечеринка">
+    </div>
+    <label class="check"><input type="checkbox" id="fAllDay" ${f.allDay ? 'checked' : ''}> Занят весь день</label>
+    <div id="fTimeWrap">
+      <div class="two">
+        <div><label class="f">Начало</label><input type="time" id="fStart" value="${f.start}"></div>
+        <div><label class="f">Конец</label><input type="time" id="fEnd" value="${f.end}"></div>
+      </div>
+      <label class="f">Время на передвижение после (минуты)</label>
+      <input type="number" id="fTravel" min="0" step="5" value="${f.travel}">
+      <div class="chips" id="travelChips"></div>
+    </div>
+    <label class="f">Заметка</label>
+    <input type="text" id="fNote" value="${esc(f.note)}" placeholder="Необязательно">
+    <div class="hint" id="fInfo"></div>
+    <div id="fWarn"></div>
+    <div class="actions">
+      ${isNew ? '<button class="btn" id="fCancel">Отмена</button>' : '<button class="btn danger" id="fDelete">Удалить</button>'}
+      <button class="btn primary" id="fSave">Сохранить</button>
+    </div>`);
+
+  const fillPlaces = keepId => {
+    const cat = catById($('fCat').value);
+    const places = cat ? cat.places : [];
+    $('fPlace').innerHTML = places.map(p => `<option value="${p.id}" ${p.id === keepId ? 'selected' : ''}>${esc(p.name)} (${p.start}–${p.end})</option>`).join('')
+      + `<option value="" ${!keepId || !places.some(p => p.id === keepId) ? 'selected' : ''}>Другое (ввести вручную)</option>`;
+    $('fNameWrap').style.display = $('fPlace').value ? 'none' : 'block';
+  };
+  const applyPlace = () => {
+    const cat = catById($('fCat').value);
+    const p = cat && cat.places.find(x => x.id === $('fPlace').value);
+    $('fNameWrap').style.display = p ? 'none' : 'block';
+    if (p) { $('fStart').value = p.start; $('fEnd').value = p.end; $('fTravel').value = p.travel; }
+    update();
+  };
+  const renderChips = () => {
+    const v = Number($('fTravel').value);
+    $('travelChips').innerHTML = TRAVEL_PRESETS.map(m => `<button type="button" class="chip ${m === v ? 'on' : ''}" data-m="${m}">${m === 0 ? '0' : fmtDur(m)}</button>`).join('');
+    $('travelChips').querySelectorAll('.chip').forEach(c => c.onclick = () => { $('fTravel').value = c.dataset.m; update(); });
+  };
+  const collect = () => {
+    const cat = catById($('fCat').value);
+    const p = cat && cat.places.find(x => x.id === $('fPlace').value);
+    return {
+      id: f.id || uid(),
+      date: $('fDate').value,
+      categoryId: $('fCat').value,
+      placeId: p ? p.id : '',
+      name: p ? p.name : $('fName').value.trim(),
+      allDay: $('fAllDay').checked,
+      start: $('fStart').value,
+      end: $('fEnd').value,
+      travel: Math.max(0, Number($('fTravel').value) || 0),
+      note: $('fNote').value.trim(),
+    };
+  };
+  const conflicts = nb => {
+    const [s, e] = busyInterval(nb);
+    return state.bookings.filter(o => o.id !== nb.id).filter(o => {
+      const [os, oe] = busyInterval(o);
+      return s < oe && os < e;
+    });
+  };
+  const update = () => {
+    renderChips();
+    $('fTimeWrap').style.display = $('fAllDay').checked ? 'none' : '';
+    const nb = collect();
+    if (!nb.date || (!nb.allDay && (!nb.start || !nb.end))) return;
+    const [, e] = busyInterval(nb);
+    const freeFrom = e - dayNum(nb.date) * DAY;
+    const dayShift = Math.floor((freeFrom - dayStart()) / DAY);
+    $('fInfo').textContent = `Следующая занятость возможна с ${fmtMin(freeFrom)}${dayShift > 0 ? ' (' + dateShort(fromDayNum(dayNum(nb.date) + dayShift)) + ')' : ''}. ${nightHint()}`;
+    const c = conflicts(nb);
+    $('fWarn').innerHTML = c.length ? `<div class="warn">Пересекается с: ${c.map(o => `${esc(bookingTitle(o))} (${dateShort(o.date)}, ${bookingTime(o)}${o.allDay ? '' : ', + дорога ' + fmtDur(o.travel || 0)})`).join('; ')}</div>` : '';
+  };
+
+  fillPlaces(f.placeId);
+  $('fCat').onchange = () => { fillPlaces(''); applyPlace(); };
+  $('fPlace').onchange = applyPlace;
+  ['fDate', 'fStart', 'fEnd', 'fTravel'].forEach(id => $(id).oninput = update);
+  $('fAllDay').onchange = update;
+  update();
+
+  if (isNew) $('fCancel').onclick = () => openDay(f.date);
+  else $('fDelete').onclick = async () => {
+    if (!await askConfirm('Удалить эту занятость?')) return;
+    state.bookings = state.bookings.filter(x => x.id !== f.id);
+    save();
+    openDay(f.date);
+  };
+  $('fSave').onclick = async () => {
+    const nb = collect();
+    if (!nb.date || (!nb.allDay && (!nb.start || !nb.end))) { toast('Заполните дату и время', true); return; }
+    if (!nb.placeId && !nb.name) nb.name = (catById(nb.categoryId) || {}).name || '';
+    if (conflicts(nb).length && !await askConfirm('Эта занятость пересекается с другой. Всё равно сохранить?', 'Сохранить', false)) return;
+    const i = state.bookings.findIndex(x => x.id === nb.id);
+    if (i >= 0) state.bookings[i] = nb; else state.bookings.push(nb);
+    save();
+    openDay(nb.date);
+  };
+}
+
+// ---------- Поиск свободных дат ----------
+$('openSearch').onclick = openSearch;
+
+function monthBounds(y, m) {
+  return [ymd(y, m, 1), ymd(y, m, new Date(y, m + 1, 0).getDate())];
+}
+
+function openSearch() {
+  const today = todayStr();
+  const [, endThis] = monthBounds(now.getFullYear(), now.getMonth());
+  const s = search || { from: today, to: endThis, mode: 'all' };
+  let mode = s.mode;
+  openModal(`
+    <h3>Свободные даты</h3>
+    <div class="chips" id="quick">
+      <button class="chip" data-q="this">Этот месяц</button>
+      <button class="chip" data-q="next">Следующий месяц</button>
+      <button class="chip" data-q="view">Месяц на экране</button>
+      <button class="chip" data-q="2w">2 недели</button>
+    </div>
+    <div class="two">
+      <div><label class="f">С</label><input type="date" id="sFrom" value="${s.from}"></div>
+      <div><label class="f">По</label><input type="date" id="sTo" value="${s.to}"></div>
+    </div>
+    <label class="f">Какие дни</label>
+    <div class="seg" id="sMode">
+      <button data-mode="all">Все дни</button>
+      <button data-mode="weekdays">Будни</button>
+      <button data-mode="weekends">Выходные</button>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="closeModal()">Отмена</button>
+      <button class="btn green" id="sGo">Показать</button>
+    </div>`);
+  const setMode = m => { mode = m; $('sMode').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === m)); };
+  setMode(mode);
+  $('sMode').querySelectorAll('button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  $('quick').querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    let from, to;
+    if (c.dataset.q === 'this') { from = today; to = endThis; }
+    if (c.dataset.q === 'next') { const d = new Date(now.getFullYear(), now.getMonth() + 1, 1); [from, to] = monthBounds(d.getFullYear(), d.getMonth()); }
+    if (c.dataset.q === 'view') { [from, to] = monthBounds(view.y, view.m); }
+    if (c.dataset.q === '2w') { from = today; to = fromDayNum(dayNum(today) + 13); }
+    $('sFrom').value = from; $('sTo').value = to;
+  });
+  $('sGo').onclick = () => {
+    const from = $('sFrom').value, to = $('sTo').value;
+    if (!from || !to || from > to) { toast('Проверьте даты: «с» должно быть раньше «по»', true); return; }
+    search = { from, to, mode };
+    const { y, m } = parseDate(from);
+    view = { y, m };
+    closeModal();
+    renderCalendar();
+    $('searchResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+}
+
+const MODE_LABEL = { all: '', weekdays: ', будни', weekends: ', выходные' };
+
+function searchTitle() {
+  return `Свободные даты (${dateShort(search.from).split(',')[0]} – ${dateShort(search.to).split(',')[0]}${MODE_LABEL[search.mode]}):`;
+}
+
+function renderSearchResult() {
+  if (!search) { $('searchResult').innerHTML = ''; return; }
+  const days = search.days;
+  $('searchResult').innerHTML = `
+    <div class="card">
+      <div class="row" style="margin-bottom:6px">
+        <b class="spacer">${esc(searchTitle())}</b>
+      </div>
+      ${freeListHtml(days)}
+      <div class="actions">
+        <button class="btn" id="sReset">Сбросить</button>
+        <button class="btn green" id="sCopy" ${days.some(d => d.slots.length) ? '' : 'disabled'}>Скопировать</button>
+      </div>
+    </div>`;
+  bindFreeList($('searchResult'));
+  $('sReset').onclick = () => { search = null; renderCalendar(); };
+  $('sCopy').onclick = () => copyText(freeDaysText(days, searchTitle()));
+}
+
+// ---------- Вкладка «Занятость» ----------
+$('addCategory').onclick = () => openCategoryForm({});
+$('minGap').onchange = e => { state.settings.minGap = Number(e.target.value); save(); };
+
+function renderCategories() {
+  $('minGap').value = String(state.settings.minGap ?? 60);
+  if (!state.categories.length) {
+    $('categories').innerHTML = '<div class="card empty">Категорий пока нет</div>';
+    return;
+  }
+  $('categories').innerHTML = state.categories.map(c => `
+    <div class="card">
+      <div class="cat-head">
+        <span class="dot" style="background:${c.color}"></span>
+        <h3>${esc(c.name)}</h3>
+        <button class="btn small" data-edit-cat="${c.id}">Изменить</button>
+      </div>
+      ${c.places.map(p => `
+        <div class="place">
+          <div class="info">
+            <div class="name">${esc(p.name)}</div>
+            <div class="meta">${p.start}–${p.end} · дорога после: ${fmtDur(p.travel)}</div>
+          </div>
+          <button class="btn small" data-edit-place="${c.id}|${p.id}">Изменить</button>
+        </div>`).join('')}
+      <button class="btn small" style="margin-top:10px" data-add-place="${c.id}">+ Добавить место</button>
+    </div>`).join('');
+  $('categories').querySelectorAll('[data-edit-cat]').forEach(b => b.onclick = () => openCategoryForm(catById(b.dataset.editCat)));
+  $('categories').querySelectorAll('[data-add-place]').forEach(b => b.onclick = () => openPlaceForm(b.dataset.addPlace, {}));
+  $('categories').querySelectorAll('[data-edit-place]').forEach(b => b.onclick = () => {
+    const [cid, pid] = b.dataset.editPlace.split('|');
+    openPlaceForm(cid, catById(cid).places.find(p => p.id === pid));
+  });
+}
+
+function openCategoryForm(c) {
+  const isNew = !c.id;
+  openModal(`
+    <h3>${isNew ? 'Новая категория' : 'Изменить категорию'}</h3>
+    <label class="f">Название</label>
+    <input type="text" id="cName" value="${esc(c.name || '')}" placeholder="Например: Свадьба">
+    <label class="f">Цвет в календаре</label>
+    <input type="color" id="cColor" value="${c.color || '#22d3ee'}">
+    <div class="actions">
+      ${isNew ? '<button class="btn" onclick="closeModal()">Отмена</button>' : '<button class="btn danger" id="cDelete">Удалить</button>'}
+      <button class="btn primary" id="cSave">Сохранить</button>
+    </div>`);
+  $('cSave').onclick = () => {
+    const name = $('cName').value.trim();
+    if (!name) { toast('Введите название', true); return; }
+    if (isNew) state.categories.push({ id: uid(), name, color: $('cColor').value, places: [] });
+    else Object.assign(c, { name, color: $('cColor').value });
+    save();
+    closeModal();
+  };
+  if (!isNew) $('cDelete').onclick = async () => {
+    const used = state.bookings.filter(b => b.categoryId === c.id).length;
+    const msg = used
+      ? `Удалить категорию «${c.name}»? Вместе с ней удалятся ${used} записей занятости в календаре.`
+      : `Удалить категорию «${c.name}»?`;
+    if (!await askConfirm(msg)) return;
+    state.categories = state.categories.filter(x => x.id !== c.id);
+    state.bookings = state.bookings.filter(b => b.categoryId !== c.id);
+    save();
+    closeModal();
+  };
+}
+
+function openPlaceForm(catId, p) {
+  const isNew = !p.id;
+  const cat = catById(catId);
+  openModal(`
+    <h3>${isNew ? 'Новое место' : 'Изменить место'} · ${esc(cat.name)}</h3>
+    <label class="f">Название заведения / ивента</label>
+    <input type="text" id="pName" value="${esc(p.name || '')}" placeholder="Например: Буква Ю">
+    <div class="two">
+      <div><label class="f">Начало</label><input type="time" id="pStart" value="${p.start || '00:00'}"></div>
+      <div><label class="f">Конец</label><input type="time" id="pEnd" value="${p.end || '02:00'}"></div>
+    </div>
+    <label class="f">Время на передвижение после (минуты)</label>
+    <input type="number" id="pTravel" min="0" step="5" value="${p.travel ?? 60}">
+    <div class="chips" id="pChips"></div>
+    <div class="hint">${nightHint() || 'Если конец раньше начала, занятость заканчивается на следующий день.'}</div>
+    <div class="actions">
+      ${isNew ? '<button class="btn" onclick="closeModal()">Отмена</button>' : '<button class="btn danger" id="pDelete">Удалить</button>'}
+      <button class="btn primary" id="pSave">Сохранить</button>
+    </div>`);
+  const chips = () => {
+    const v = Number($('pTravel').value);
+    $('pChips').innerHTML = TRAVEL_PRESETS.map(m => `<button type="button" class="chip ${m === v ? 'on' : ''}" data-m="${m}">${m === 0 ? '0' : fmtDur(m)}</button>`).join('');
+    $('pChips').querySelectorAll('.chip').forEach(c => c.onclick = () => { $('pTravel').value = c.dataset.m; chips(); });
+  };
+  chips();
+  $('pTravel').oninput = chips;
+  $('pSave').onclick = () => {
+    const name = $('pName').value.trim();
+    if (!name) { toast('Введите название', true); return; }
+    const data = { name, start: $('pStart').value, end: $('pEnd').value, travel: Math.max(0, Number($('pTravel').value) || 0) };
+    if (isNew) cat.places.push({ id: uid(), ...data });
+    else Object.assign(p, data);
+    save();
+    closeModal();
+  };
+  if (!isNew) $('pDelete').onclick = async () => {
+    if (!await askConfirm(`Удалить место «${p.name}»? Записи в календаре останутся.`)) return;
+    cat.places = cat.places.filter(x => x.id !== p.id);
+    save();
+    closeModal();
+  };
+}
+
+// Резервная копия
+$('exportData').onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `dj-calendar-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('importData').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data.categories) || !Array.isArray(data.bookings)) throw new Error();
+    if (!await askConfirm('Текущие данные будут заменены данными из файла. Продолжить?', 'Заменить')) return;
+    state = { settings: { minGap: 60 }, overrides: {}, ...data };
+    save();
+    toast('Данные загружены');
+  } catch (err) {
+    toast('Не удалось прочитать файл', true);
+  }
+};
+
+// ---------- Вкладка «Свободные даты» ----------
+let freeView = { y: now.getFullYear(), m: now.getMonth() };
+$('freePrev').onclick = () => { freeView.m--; if (freeView.m < 0) { freeView.m = 11; freeView.y--; } renderFreeMonth(); };
+$('freeNext').onclick = () => { freeView.m++; if (freeView.m > 11) { freeView.m = 0; freeView.y++; } renderFreeMonth(); };
+
+function freeMonthData() {
+  let [from, to] = monthBounds(freeView.y, freeView.m);
+  const today = todayStr();
+  if (to < today) return { from, to, days: [] };
+  if (from < today) from = today; // прошедшие дни не показываем
+  return { from, to, days: freeDays(from, to, 'all') };
+}
+
+function renderFreeMonth() {
+  $('freeTitle').textContent = `${MONTHS[freeView.m]} ${freeView.y}`;
+  const { days } = freeMonthData();
+  const shown = days.filter(d => d.slots.length).length;
+  $('freeCount').textContent = shown ? `Свободных дней: ${shown}` : '';
+  $('freeMonthList').innerHTML = freeListHtml(days);
+  bindFreeList($('freeMonthList'));
+  $('copyMonth').disabled = !shown;
+  $('resetMonth').style.display = days.some(d => d.edited) ? '' : 'none';
+}
+
+// Сбрасывает ручные правки только для месяца на экране
+$('resetMonth').onclick = async () => {
+  const edited = freeMonthData().days.filter(d => d.edited);
+  if (!edited.length) return;
+  const n = edited.length;
+  const word = n % 10 === 1 && n % 100 !== 11 ? 'дату' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'даты' : 'дат');
+  if (!await askConfirm(`Сбросить правки за ${MONTHS[freeView.m]} (${n} ${word})? Свободное время снова будет как в календаре.`, 'Сбросить')) return;
+  edited.forEach(d => delete state.overrides[d.date]);
+  save();
+  toast('Правки сброшены');
+};
+
+// ---------- Список свободных дат и его ручная правка ----------
+function freeListHtml(days) {
+  if (!days.length) return '<div class="empty">Свободных дат нет</div>';
+  return `<ul class="free-list">${days.map(d => `
+    <li class="${d.slots.length ? '' : 'removed'}" data-date="${d.date}">
+      <span class="d">${dateShort(d.date)}</span>
+      <span class="t">${d.slots.length ? slotsText(d.slots) : 'убрано из списка'}</span>
+      ${d.edited ? '<span class="tag">изменено</span>' : ''}
+      <span class="edit">✎</span>
+    </li>`).join('')}</ul>`;
+}
+
+function bindFreeList(root) {
+  root.querySelectorAll('li[data-date]').forEach(li => li.onclick = () => openSlotEditor(li.dataset.date));
+}
+
+// Время промежутка внутри суток; конец, совпадающий с началом суток, — это конец суток
+const slotStart = t => dayMin(t);
+const slotEnd = t => { const m = toMin(t); return m <= dayStart() ? m + DAY : m; };
+
+function openSlotEditor(ds) {
+  const real = freeSlots(ds);
+  const slots = (listSlots(ds, real) || real).map(x => x.slice());
+  const draw = () => {
+    openModal(`
+      <h3>${dateLong(ds)}</h3>
+      <div class="hint" style="margin:0 0 10px">Правка меняет только список свободных дат и текст для копирования. Календарь и занятость не меняются.</div>
+      <div class="muted" style="font-size:13px;margin-bottom:10px">По календарю свободно: ${slotsText(real)}</div>
+      ${slots.length ? slots.map((x, i) => `
+        <div class="slot-row">
+          <input type="time" data-i="${i}" data-k="0" value="${fmtMin(x[0])}">
+          <span class="muted">–</span>
+          <input type="time" data-i="${i}" data-k="1" value="${fmtMin(x[1])}">
+          <button class="icon-btn" data-del="${i}" aria-label="Удалить время">✕</button>
+        </div>`).join('') : '<div class="empty">Дата будет убрана из списка</div>'}
+      <div class="row" style="margin-top:4px">
+        <button class="btn small" id="seRestore">Как в календаре</button>
+        ${slots.length ? '<button class="btn small danger" id="seRemove">Убрать дату</button>' : ''}
+      </div>
+      <div class="actions">
+        <button class="btn" id="seCancel">Отмена</button>
+        <button class="btn primary" id="seSave">Сохранить</button>
+      </div>`);
+    $('modal').querySelectorAll('.slot-row input').forEach(inp => inp.oninput = () => {
+      if (!inp.value) return;
+      slots[inp.dataset.i][inp.dataset.k] = inp.dataset.k === '0' ? slotStart(inp.value) : slotEnd(inp.value);
+    });
+    $('modal').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { slots.splice(Number(b.dataset.del), 1); draw(); });
+    $('seRestore').onclick = () => { slots.splice(0, slots.length, ...real.map(x => x.slice())); draw(); };
+    if ($('seRemove')) $('seRemove').onclick = () => { slots.length = 0; draw(); };
+    $('seCancel').onclick = closeModal;
+    $('seSave').onclick = () => {
+      if (slots.some(([a, b]) => b <= a)) { toast('Конец должен быть позже начала', true); return; }
+      slots.sort((a, b) => a[0] - b[0]);
+      if (sameSlots(slots, real)) delete state.overrides[ds];
+      else state.overrides[ds] = { base: real, slots };
+      save();
+      closeModal();
+      toast('Сохранено');
+    };
+  };
+  draw();
+}
+
+$('copyMonth').onclick = () => {
+  const { days } = freeMonthData();
+  copyText(freeDaysText(days, `Свободные даты на ${MONTHS[freeView.m]} ${freeView.y}:`));
+};
+
+// ---------- Настройки: тема и границы суток ----------
+function applyTheme(theme = state.settings.theme || 'dark') {
+  document.documentElement.dataset.theme = theme;
+  document.querySelector('meta[name=theme-color]').content = theme === 'light' ? '#f4f4f8' : '#0e0e14';
+}
+
+$('openSettings').onclick = () => {
+  let theme = state.settings.theme || 'dark';
+  openModal(`
+    <h3>Настройки</h3>
+    <label class="f">Тема</label>
+    <div class="seg" id="stTheme">
+      <button data-v="dark">Тёмная</button>
+      <button data-v="light">Светлая</button>
+    </div>
+    <label class="f">Сутки для расчёта свободного времени</label>
+    <div class="two">
+      <div><label class="f" style="margin-top:0">Начало</label><input type="time" id="stStart" value="${state.settings.dayStart || '06:00'}"></div>
+      <div><label class="f" style="margin-top:0">Конец</label><input type="time" id="stEnd" value="${state.settings.dayEnd || '06:00'}"></div>
+    </div>
+    <div class="hint" id="stHint"></div>
+    <div class="actions">
+      <button class="btn" id="stCancel">Отмена</button>
+      <button class="btn primary" id="stSave">Сохранить</button>
+    </div>`);
+  const setTheme = v => {
+    theme = v;
+    applyTheme(v); // показываем тему сразу, сохраняется она кнопкой «Сохранить»
+    $('stTheme').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  };
+  const hint = () => {
+    const s = $('stStart').value || '06:00', e = $('stEnd').value || s;
+    const next = toMin(e) <= toMin(s);
+    $('stHint').textContent = `Сутки: с ${s} до ${e}${next ? ' следующего дня' : ''}. ` +
+      (toMin(s) ? `Время с 00:00 до ${s} считается ночью предыдущей даты. ` : '') +
+      'Свободное время вне этих границ не показывается. Ручные правки в списке свободных дат после смены границ сбросятся.';
+  };
+  setTheme(theme);
+  hint();
+  $('stTheme').querySelectorAll('button').forEach(b => b.onclick = () => setTheme(b.dataset.v));
+  $('stStart').oninput = hint;
+  $('stEnd').oninput = hint;
+  $('stCancel').onclick = closeModal;
+  $('stSave').onclick = () => {
+    if (!$('stStart').value || !$('stEnd').value) { toast('Укажите начало и конец суток', true); return; }
+    state.settings.theme = theme;
+    state.settings.dayStart = $('stStart').value;
+    state.settings.dayEnd = $('stEnd').value;
+    applyTheme();
+    save();
+    closeModal();
+    toast('Настройки сохранены');
+  };
+};
+
+function renderAll() {
+  renderCalendar();
+  renderCategories();
+  renderFreeMonth();
+}
+
+applyTheme();
+renderAll();
+
+// Установка на экран «Домой»: офлайн-режим и просьба не удалять данные
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+</script>
+</body>
+</html>
